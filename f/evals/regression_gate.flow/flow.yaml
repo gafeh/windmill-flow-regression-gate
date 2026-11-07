@@ -16,7 +16,7 @@ value:
       summary: Make sure the baseline table exists
       value:
         type: rawscript
-        content: '!inline init_baseline_table.sql'
+        content: '!inline make_sure_the_baseline_table_exists.inline_script.pg.sql'
         input_transforms:
           database:
             type: javascript
@@ -27,7 +27,7 @@ value:
       summary: Expand each case into one entry per repeat
       value:
         type: rawscript
-        content: '!inline plan.ts'
+        content: '!inline expand_each_case_into_one_entry_per_repeat.inline_script.ts'
         input_transforms:
           dataset:
             type: javascript
@@ -35,7 +35,7 @@ value:
           repeats:
             type: javascript
             expr: flow_input.repeats
-        lock: '!inline plan.lock'
+        lock: '!inline expand_each_case_into_one_entry_per_repeat.inline_script.lock'
         language: bun
     - id: run_cases
       summary: Run and score every case
@@ -45,7 +45,7 @@ value:
           - id: run_target
             value:
               type: rawscript
-              content: '!inline run_target.ts'
+              content: '!inline run_target.inline_script.ts'
               input_transforms:
                 payload:
                   type: javascript
@@ -53,7 +53,7 @@ value:
                 target_flow_path:
                   type: javascript
                   expr: flow_input.target_flow_path
-              lock: '!inline run_target.lock'
+              lock: '!inline run_target.inline_script.lock'
               language: bun
             retry:
               constant:
@@ -62,7 +62,7 @@ value:
           - id: score_case
             value:
               type: rawscript
-              content: '!inline score_case.ts'
+              content: '!inline score_case.inline_script.ts'
               input_transforms:
                 anthropic_key:
                   type: static
@@ -76,7 +76,7 @@ value:
                 run:
                   type: javascript
                   expr: results.run_target
-              lock: '!inline score_case.lock'
+              lock: '!inline score_case.inline_script.lock'
               language: bun
         iterator:
           type: javascript
@@ -87,18 +87,18 @@ value:
       summary: Mean and spread per case
       value:
         type: rawscript
-        content: '!inline aggregate.ts'
+        content: '!inline mean_and_spread_per_case.inline_script.ts'
         input_transforms:
           rows:
             type: javascript
             expr: results.run_cases
-        lock: '!inline aggregate.lock'
+        lock: '!inline mean_and_spread_per_case.inline_script.lock'
         language: bun
     - id: read_baseline
       summary: Load the last known-good run
       value:
         type: rawscript
-        content: '!inline read_baseline.sql'
+        content: '!inline load_the_last_known-good_run.inline_script.pg.sql'
         input_transforms:
           database:
             type: javascript
@@ -112,7 +112,7 @@ value:
       summary: Decide pass, review or fail
       value:
         type: rawscript
-        content: '!inline compare.ts'
+        content: '!inline decide_pass,_review_or_fail.inline_script.ts'
         input_transforms:
           agg:
             type: javascript
@@ -126,18 +126,18 @@ value:
           score_drop_tolerance:
             type: javascript
             expr: flow_input.score_drop_tolerance
-        lock: '!inline compare.lock'
+        lock: '!inline decide_pass,_review_or_fail.inline_script.lock'
         language: bun
     - id: fail_if_regressed
       summary: Block, naming the cases that broke
       value:
         type: rawscript
-        content: '!inline fail_if_regressed.ts'
+        content: '!inline block,_naming_the_cases_that_broke.inline_script.ts'
         input_transforms:
           compare:
             type: javascript
             expr: results.compare
-        lock: '!inline fail_if_regressed.lock'
+        lock: '!inline block,_naming_the_cases_that_broke.inline_script.lock'
         language: bun
       skip_if:
         expr: results.compare.verdict !== 'fail'
@@ -172,7 +172,7 @@ value:
       summary: Promote this run to the new baseline
       value:
         type: rawscript
-        content: '!inline write_baseline.sql'
+        content: '!inline promote_this_run_to_the_new_baseline.inline_script.pg.sql'
         input_transforms:
           database:
             type: javascript

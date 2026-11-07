@@ -9,7 +9,7 @@ value:
     - id: route
       value:
         type: rawscript
-        content: '!inline route.ts'
+        content: '!inline route.inline_script.ts'
         input_transforms:
           text:
             type: javascript
@@ -17,7 +17,7 @@ value:
           tier:
             type: javascript
             expr: flow_input.tier
-        lock: '!inline route.lock'
+        lock: '!inline route.inline_script.lock'
         language: bun
 schema:
   $schema: https://json-schema.org/draft/2020-12/schema

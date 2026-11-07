@@ -1,0 +1,13 @@
+description: ''
+value:
+  dbname: windmill
+  host: db
+  options: ''
+  password: $var:f/evals/baseline_db
+  port: 5432
+  region: ''
+  root_certificate_pem: ''
+  sslmode: disable
+  use_iam_auth: false
+  user: postgres
+resource_type: postgresql
