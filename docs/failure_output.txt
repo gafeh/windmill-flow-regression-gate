@@ -1,0 +1,23 @@
+[33mYour AGENTS.wmill.md is out of date. Run `wmill refresh prompts` to refresh.[39m
+[34mAuto-selected workspace 'demo' (only workspace in config).
+Use --workspace to override or 'wmill workspace bind' to add more workspaces.[39m
+[34mUsing workspace override: demo[39m
+[34mUsing workspace 'demo' (selected via --workspace) → demo on http://localhost/ (profile 'local')[39m
+[34m[2mWaitingForPriorSteps[22m[39m
+[34m====== init_table: Make sure the baseline table exists ======[39m
+[34m[33mWaiting for Job 01a1b784-92e7-ec1d-089a-fcc63438e3bf to start...[39m[39m
+job=01a1b784-92e7-ec1d-089a-fcc63438e3bf tag=postgresql worker=wk-native-a90297f58899-BMz2T hostname=a90297f58899 isolation=none
+[34m
+[39m
+[34m[31m[4m[1mJob Completed[22m[24m[39m[39m
+[34m
+[39m
+[34m[2mWaitingForPriorSteps[22m[39m
+[34m[1m[4m[31mFlow failed[39m[24m[22m[39m
+[34m
+[39m
+[34m{
+  "gate": "failed",
+  "step": "init_table",
+  "message": "execution error:\nNot found: Resource f/evals/baseline_db not found for `database`: Not found: Resource f/evals/baseline_db not found"
+}[39m

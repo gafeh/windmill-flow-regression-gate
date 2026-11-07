@@ -1,0 +1,243 @@
+summary: Flow regression gate
+description: |
+  Regression-tests another Windmill flow against a labelled dataset. Runs every
+  case N times, scores each run with deterministic checks and an optional LLM
+  judge, then compares the run to the last known-good baseline in Postgres.
+  Fails and names the specific cases that broke if any case dropped beyond
+  tolerance or is unstable across repeats. Low-confidence runs pause for human
+  approval before the baseline moves. Run it on a schedule, or as a gate before
+  promoting a flow to a production workspace.
+
+  No third-party dependencies. Everything runs on Windmill primitives and
+  Windmill's own client.
+value:
+  modules:
+    - id: init_table
+      summary: Make sure the baseline table exists
+      value:
+        type: rawscript
+        content: '!inline init_baseline_table.sql'
+        input_transforms:
+          database:
+            type: javascript
+            expr: flow_input.db
+        lock: ''
+        language: postgresql
+    - id: plan
+      summary: Expand each case into one entry per repeat
+      value:
+        type: rawscript
+        content: '!inline plan.ts'
+        input_transforms:
+          dataset:
+            type: javascript
+            expr: flow_input.dataset
+          repeats:
+            type: javascript
+            expr: flow_input.repeats
+        lock: '!inline plan.lock'
+        language: bun
+    - id: run_cases
+      summary: Run and score every case
+      value:
+        type: forloopflow
+        modules:
+          - id: run_target
+            value:
+              type: rawscript
+              content: '!inline run_target.ts'
+              input_transforms:
+                payload:
+                  type: javascript
+                  expr: flow_input.iter.value.input
+                target_flow_path:
+                  type: javascript
+                  expr: flow_input.target_flow_path
+              lock: '!inline run_target.lock'
+              language: bun
+            retry:
+              constant:
+                attempts: 2
+                seconds: 5
+          - id: score_case
+            value:
+              type: rawscript
+              content: '!inline score_case.ts'
+              input_transforms:
+                anthropic_key:
+                  type: static
+                  value: ''
+                c:
+                  type: javascript
+                  expr: flow_input.iter.value
+                judge_model:
+                  type: javascript
+                  expr: flow_input.judge_model
+                run:
+                  type: javascript
+                  expr: results.run_target
+              lock: '!inline score_case.lock'
+              language: bun
+        iterator:
+          type: javascript
+          expr: results.plan
+        parallel: false
+        skip_failures: false
+    - id: aggregate
+      summary: Mean and spread per case
+      value:
+        type: rawscript
+        content: '!inline aggregate.ts'
+        input_transforms:
+          rows:
+            type: javascript
+            expr: results.run_cases
+        lock: '!inline aggregate.lock'
+        language: bun
+    - id: read_baseline
+      summary: Load the last known-good run
+      value:
+        type: rawscript
+        content: '!inline read_baseline.sql'
+        input_transforms:
+          database:
+            type: javascript
+            expr: flow_input.db
+          target_flow_path:
+            type: javascript
+            expr: flow_input.target_flow_path
+        lock: ''
+        language: postgresql
+    - id: compare
+      summary: Decide pass, review or fail
+      value:
+        type: rawscript
+        content: '!inline compare.ts'
+        input_transforms:
+          agg:
+            type: javascript
+            expr: results.aggregate
+          baseline_rows:
+            type: javascript
+            expr: results.read_baseline
+          max_spread:
+            type: javascript
+            expr: flow_input.max_spread
+          score_drop_tolerance:
+            type: javascript
+            expr: flow_input.score_drop_tolerance
+        lock: '!inline compare.lock'
+        language: bun
+    - id: fail_if_regressed
+      summary: Block, naming the cases that broke
+      value:
+        type: rawscript
+        content: '!inline fail_if_regressed.ts'
+        input_transforms:
+          compare:
+            type: javascript
+            expr: results.compare
+        lock: '!inline fail_if_regressed.lock'
+        language: bun
+      skip_if:
+        expr: results.compare.verdict !== 'fail'
+    - id: gate
+      summary: Pause for sign-off when confidence is low
+      value:
+        type: branchone
+        branches:
+          - summary: Needs human review
+            modules:
+              - id: approval
+                value:
+                  type: identity
+                suspend:
+                  required_events: 1
+                  resume_form:
+                    schema:
+                      type: object
+                      properties:
+                        note:
+                          type: string
+                          description: Why this run is acceptable as the new baseline
+                  timeout: 86400
+            expr: results.compare.verdict === 'review'
+            parallel: true
+            skip_failure: false
+        default:
+          - id: no_review_needed
+            value:
+              type: identity
+    - id: write_baseline
+      summary: Promote this run to the new baseline
+      value:
+        type: rawscript
+        content: '!inline write_baseline.sql'
+        input_transforms:
+          database:
+            type: javascript
+            expr: flow_input.db
+          mean:
+            type: javascript
+            expr: results.aggregate.mean
+          per_case:
+            type: javascript
+            expr: JSON.stringify(results.aggregate.cases)
+          target_flow_path:
+            type: javascript
+            expr: flow_input.target_flow_path
+          verdict:
+            type: javascript
+            expr: results.compare.verdict
+        lock: ''
+        language: postgresql
+  failure_module:
+    id: failure
+    value:
+      type: rawscript
+      content: '!inline failure.inline_script.ts'
+      input_transforms:
+        message:
+          type: javascript
+          expr: error.message
+        step_id:
+          type: javascript
+          expr: error.step_id
+      lock: '!inline failure.inline_script.lock'
+      language: bun
+schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  properties:
+    dataset:
+      type: array
+      description: 'Labelled cases: {id, input, expected}'
+      items:
+        type: object
+    db:
+      type: object
+      description: Where baselines are stored
+      format: resource-postgresql
+    judge_model:
+      type: string
+      description: Leave empty to score with deterministic checks only
+      default: ''
+    max_spread:
+      type: number
+      description: Max score range across repeats before a case counts as unstable
+      default: 0.2
+    repeats:
+      type: integer
+      description: Runs per case, used to measure variance
+      default: 3
+    score_drop_tolerance:
+      type: number
+      description: How far a single case may drop before it counts as a regression
+      default: 0.02
+    target_flow_path:
+      type: string
+      description: Full path of the flow under test, e.g. f/demo/support_router
+  required:
+    - target_flow_path
+    - dataset
+    - db

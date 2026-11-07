@@ -1,0 +1,22 @@
+[
+  {
+    "id": "enterprise_outage",
+    "input": { "text": "Our whole team is locked out, production is down", "tier": "enterprise" },
+    "expected": { "equals": { "queue": "priority", "sla_hours": 1 } }
+  },
+  {
+    "id": "free_double_charge",
+    "input": { "text": "I was charged twice this month", "tier": "free" },
+    "expected": { "equals": { "queue": "billing", "sla_hours": 4 } }
+  },
+  {
+    "id": "free_how_do_i",
+    "input": { "text": "How do I change my avatar?", "tier": "free" },
+    "expected": { "equals": { "queue": "general", "sla_hours": 24 } }
+  },
+  {
+    "id": "paraphrased_billing",
+    "input": { "text": "my card got hit two times for the same invoice", "tier": "free" },
+    "expected": { "checklist": ["routed to the billing queue", "sla is 4 hours or tighter"] }
+  }
+]

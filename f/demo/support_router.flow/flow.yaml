@@ -1,0 +1,34 @@
+summary: Support ticket router
+description: |
+  A deliberately simple target flow for the regression gate demo. Routes a
+  support ticket to a queue and an SLA based on urgency keywords and customer
+  tier. The keyword matching is the part that breaks under paraphrasing, which
+  is why the gate's dataset includes a paraphrased case.
+value:
+  modules:
+    - id: route
+      value:
+        type: rawscript
+        content: '!inline route.ts'
+        input_transforms:
+          text:
+            type: javascript
+            expr: flow_input.text
+          tier:
+            type: javascript
+            expr: flow_input.tier
+        lock: '!inline route.lock'
+        language: bun
+schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  properties:
+    text:
+      type: string
+      description: The ticket body
+    tier:
+      type: string
+      description: Customer tier
+      default: free
+  required:
+    - text
